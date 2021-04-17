@@ -36,8 +36,8 @@ void* hiloReceptor(void* args){
         //recibimos los tickets de cada nodo
         receive(idColaRequest,&id_nodo_origen,&ticket_origen); // Al pasarlo como puntero por parametro podemos mantener los cambios
         
-        if(mi_ticket > ticket_origen){  //Obtenemos el ticket mayor de los 2 
-            max_ticket = mi_ticket;
+        if(max_ticket > ticket_origen){  //Obtenemos el ticket mayor de los 2 
+            max_ticket = max_ticket;
         }else{
             max_ticket = ticket_origen;
         }
@@ -150,6 +150,7 @@ int main(int args,char *argv[]){  // ./proceso-hilos mi_id nodos
 
     inicializacion(N,&id_nodos[0]);
 
+    printf("%i\n",mi_id);
     printf("%i\n",id_nodos[0]);
     printf("%i\n",id_nodos[1]);
     printf("%i\n",id_nodos[2]);
