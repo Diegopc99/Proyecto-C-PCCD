@@ -17,7 +17,7 @@ struct mensaje{
 
 int receive(int cola,int *id_nodo_origen,int *ticket);
 int send(int cola,int id_nodo_destino,int id_nodo_origen,int ticket);
-void* hiloProceso(int *numero_proceso);
+void* hiloProceso(void *);
 void* hiloReceptor(void* args);
 
 int mi_ticket = 0;
@@ -35,6 +35,7 @@ sem_t sem_procesos;
 sem_t sem_solicita_SC;
 sem_t sem_sale_SC;
 sem_t sem_resto_procesos;
+sem_t sem_crear_hilos;
 
 void* hiloReceptor(void* args){
 
@@ -104,10 +105,14 @@ void inicializacion(int N,int *id_nodos){
 
     pthread_t hilo_procesos[100];
     int i = 0;
+    int j = 0;
 
     for(i=0;i<Nprocesos;i++){
 
-        pthread_create(&hilo_procesos[i],NULL,hiloProceso,(int *) &i);
+        pthread_create(&hilo_procesos[i],NULL,hiloProceso,(void *)&j);
+
+        sem_wait(&sem_crear_hilos); //Semaforo para controlar que el hilo actualice su id correctamente
+        j++;
 
     }
 
@@ -121,6 +126,7 @@ void inicializacion(int N,int *id_nodos){
     sem_init(&sem_sale_SC,0,0);
 
     sem_init(&sem_resto_procesos,0,1);
+    sem_init(&sem_crear_hilos,0,1);
 
     //////////////////////////////////////////////////////////////////
 
@@ -169,26 +175,32 @@ int receive(int cola,int *id_nodo_origen,int *ticket){  //Utilizamos punteros pa
     return 0;
 }
 
-void* hiloProceso(int *numero_proceso){
+void* hiloProceso(void *numero_proceso){
 
-    sleep(10); //Para que le de tiempo al main a empezar a esperar haciendo el wait
+    int num_proceso = *((int*)numero_proceso);
+
+    sem_post(&sem_crear_hilos);
+
+    sleep(10); //Para que le de tiempo al main a empezar a esperar haciendo el wait (tiempo para la inicializacion de todos los hilos)
 
     sem_wait(&sem_resto_procesos); // Bloqueamos la ejecucion del resto de procesos del nodo
 
         sem_post(&sem_solicita_SC);
-        printf("Proceso %i solicita entrar en la SECCION CRITICA\n",*numero_proceso);
+        printf("Proceso %i solicita entrar en la SECCION CRITICA\n",num_proceso);
         
         sem_wait(&sem_procesos); //El main hace un post a ese sem si consigue la exclusion mutua
 
-
-        printf("Proceso %i entra en la SECCION CRITICA\n",*numero_proceso);
+        printf("Proceso %i entra en la SECCION CRITICA\n",num_proceso);
         sleep(5);
-        printf("Proceso %i sale de la SECCION CRITICA\n",*numero_proceso);
+        printf("Proceso %i sale de la SECCION CRITICA\n",num_proceso);
 
         sem_post(&sem_sale_SC);
 
     sem_post(&sem_resto_procesos);
 
+    pthread_exit(NULL);
+
+    //free(numero_proceso); //Liberamos la memoria creada con malloc en la inicializacion
 
     return numero_proceso;
 }
