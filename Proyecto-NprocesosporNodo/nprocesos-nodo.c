@@ -15,8 +15,8 @@ struct mensaje{
     int ticket;
 };
 
-int receive(int cola,int *id_nodo_origen,int *ticket);
-int send(int cola,int id_nodo_destino,int id_nodo_origen,int ticket);
+int receive(int tipo_cola,int *id_nodo_origen,int *ticket);
+int send(int tipo_cola,int id_nodo_destino,int id_nodo_origen,int ticket);
 void* hiloProceso(void *);
 void* hiloReceptor(void* args);
 
@@ -30,6 +30,9 @@ int idColaReply;
 int quiero = 0;
 int max_ticket = 0;
 int Nprocesos = 0;
+int REQUEST = 1;
+int REPLY = 2;
+int id_nodos[1000];
 
 sem_t sem_procesos;
 sem_t sem_solicita_SC;
@@ -44,7 +47,7 @@ void* hiloReceptor(void* args){
 
     do{
         //recibimos los tickets de cada nodo
-        receive(idColaRequest,&id_nodo_origen,&ticket_origen); // Al pasarlo como puntero por parametro podemos mantener los cambios
+        receive(REQUEST,&id_nodo_origen,&ticket_origen); // Al pasarlo como puntero por parametro podemos mantener los cambios
         
         if(max_ticket > ticket_origen){  //Obtenemos el ticket mayor de los 2 
             max_ticket = max_ticket;
@@ -55,7 +58,7 @@ void* hiloReceptor(void* args){
         //if(mi_ticket > ticket_origen){
         if(!quiero || (ticket_origen < mi_ticket) || ((ticket_origen == mi_ticket) && (id_nodo_origen < mi_id))){
             //enviamos un reply al nodo si el ticket es menor
-            send(idColaReply,id_nodo_origen,mi_id,0);
+            send(REPLY,id_nodo_origen,mi_id,0); // idColaReply
 
         }else{
             id_nodos_pend[num_pendientes++] = id_nodo_origen;   
@@ -72,7 +75,7 @@ void inicializacion(int N,int *id_nodos){
 
     /////////////////// CREAMOS EL BUZON //////////////////////////
 
-    key_t key = ftok("/home/diego",20);
+    /*key_t key = ftok("/home/diego",20);
 
     idColaRequest = msgget(key,IPC_CREAT|0777); // Si no existe la cola la crea
 
@@ -93,7 +96,7 @@ void inicializacion(int N,int *id_nodos){
     }
 
     printf("ID cola REPLY de mensajes del NODO %i: %i\n",mi_id,idColaReply);
-
+    */  
     //////////////// CREAMOS EL HILO DEL PROCESO RECEPTOR ///////////////
 
     pthread_t hilo_receptor;
@@ -132,7 +135,7 @@ void inicializacion(int N,int *id_nodos){
 
     /////////////////// CALCULAMOS EL RESTO DE NODOS /////////////////
 
-    int valor_nodo = 1;
+    /*int valor_nodo = 1;
     i = 0;
 
     for(i=0;i<N-1;i++){  //Guardamos los id de nodo menos el nuestro para luego poder reenviar a todos los nodos
@@ -141,7 +144,7 @@ void inicializacion(int N,int *id_nodos){
             valor_nodo++;
         }
             id_nodos[i] = valor_nodo++; // Almacenamos el id de nod en el array
-    }
+    }*/
 
     /////////////////////////////////////////////////////////////////////////
 
@@ -150,24 +153,24 @@ void inicializacion(int N,int *id_nodos){
     return;
 }
 
-int send(int cola,int id_nodo_destino,int id_nodo_origen,int ticket){
+int send(int tipo_cola,int id_nodo_destino,int id_nodo_origen,int ticket){
         
     struct mensaje mensaje;
 
-    mensaje.mtype = id_nodo_destino; // Para que asi el destinatario pueda recojer sus mensajes
+    mensaje.mtype = tipo_cola; // Para que asi el destinatario pueda recojer sus mensajes
     mensaje.id_nodo = id_nodo_origen;
     mensaje.ticket = ticket;
 
-    msgsnd(cola,(struct msgbuf *)&mensaje,sizeof(mensaje.id_nodo)*2,0);
+    msgsnd(id_nodo_destino,(struct msgbuf *)&mensaje,sizeof(mensaje.id_nodo)*2,0);
 
     return 0;
 }
 
-int receive(int cola,int *id_nodo_origen,int *ticket){  //Utilizamos punteros para poder actualizar las variables con los datos recibidos
+int receive(int tipo_cola,int *id_nodo_origen,int *ticket){  //Utilizamos punteros para poder actualizar las variables con los datos recibidos
 
     struct mensaje mensaje;
 
-    msgrcv(cola,(struct msgbuf *)&mensaje,sizeof(mensaje.id_nodo)*2,mi_id,0);
+    msgrcv(mi_id,(struct msgbuf *)&mensaje,sizeof(mensaje.id_nodo)*2,tipo_cola,0);
 
     *id_nodo_origen = mensaje.id_nodo;
     *ticket = mensaje.ticket;
@@ -212,13 +215,17 @@ int main(int args,char *argv[]){  // ./proceso-hilos mi_id nodos
     mi_id = atoi(argv[1]);
     N = atoi(argv[2]);
     Nprocesos = atoi(argv[3]);
-    int id_nodos[N-1];
+    //id_nodos[N-1];
     int id_aux = 0;
+
+    for(int i=0;i<N-1;i++){  //Utilizamos los id de colas introducidos como id de nodo
+        id_nodos[i] = atoi(argv[i+4]);
+    }
 
     inicializacion(N,&id_nodos[0]);
 
-    printf("%i\n",mi_id);
-    printf("%i\n",id_nodos[0]);
+    printf("mi_id: %i\n",mi_id);
+    printf("id_nodo 1: %i\n",id_nodos[0]);
     printf("%i\n",id_nodos[1]);
     printf("%i\n",id_nodos[2]);
 
@@ -237,14 +244,14 @@ int main(int args,char *argv[]){  // ./proceso-hilos mi_id nodos
         for(i=0;i<N-1;i++){ // No metemos al primero del array porque es el propio nodo
             
             //enviamos a todos los nodos los tickets
-            send(idColaRequest,id_nodos[i],mi_id,mi_ticket);
+            send(REQUEST,id_nodos[i],mi_id,mi_ticket);
             printf("Solicitud enviada al nodo %i\n",id_nodos[i]);
 
         }
 
         for(i=0;i<N-1;i++){
             //recibimos los tickets de todos los nodos
-            receive(idColaReply,&id_aux,&mi_ticket);
+            receive(REPLY,&id_aux,&mi_ticket);  // idColaReply
             printf("Solicitud recibida del nodo %i\n",id_aux);
         }
 
@@ -263,7 +270,7 @@ int main(int args,char *argv[]){  // ./proceso-hilos mi_id nodos
 
         for(i=0;i<num_pendientes;i++){
             //enviamos a cada nodo un reply de que hemos pasado la seccion critica
-            send(idColaReply,id_nodos_pend[i],mi_id,0);
+            send(REPLY,id_nodos_pend[i],mi_id,0); //idColaReply
             printf("Respuesta enviada al nodo %i\n",id_nodos_pend[i]);
         }
 
